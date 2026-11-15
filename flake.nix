@@ -93,6 +93,8 @@
               # opencode's CLI talks to its local background service over
               # loopback; it must bypass the filtering proxy.
               NO_PROXY = "localhost,127.0.0.1,::1";
+              OPENCODE_ENABLE_EXA = "1";
+              OPENCODE_WEBSEARCH_PROVIDER = "exa";
             } // extraEnv;
             allowedDomains = baseAllowedDomains 
               // builtins.listToAttrs (map (d: {
