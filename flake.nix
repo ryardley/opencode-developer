@@ -77,49 +77,55 @@
           # opencode v1 (matches the version ralph was built against; the host
           # runs 1.18.29 and uses the v1 config format). Switch to the v2 CLI
           # by using `pkg = pkgs.opencode;` instead.
-          mkOpencode = { extraAllowedDomains ? [ ], extraEnv ? { } }: sbx.mkSandbox {
-            pkg = llm-agents.packages.${system}.opencode;
-            binName = "opencode";
-            outName = "opencode";
-            allowedPackages = sbx.commonTools
-              ++ (with pkgs; [
-                cargo
-                rustc
-                nodejs_22
-                yarn
-                foundry
-                devenv
-              ]);
-            # devenv shells out to nix, so the sandbox needs the nix store and
-            # the daemon socket. allowNix binds /nix/store and /nix/var
-            # read-only, puts nix on PATH, and binds the daemon socket;
-            # agent-sandbox requires allowUnixSockets for the daemon socket.
-            allowNix = true;
-            allowUnixSockets = true;
-            # opencode's own state (sessions, db) is left to the masked home:
-            # writable and ephemeral, discarded at exit. Nothing on the host is
-            # written outside the project directory.
-            rwDirs = [ ];
-            roDirs = [ "$HOME/.config/opencode" ];
-            roFiles = [
-              "$HOME/.local/share/opencode/auth.json"
-            ];
-            env = {
-              # opencode's CLI talks to its local background service over
-              # loopback; it must bypass the filtering proxy.
-              NO_PROXY = "localhost,127.0.0.1,::1";
-              OPENCODE_ENABLE_EXA = "1";
-              OPENCODE_WEBSEARCH_PROVIDER = "exa";
-              # The sandbox does not see /etc/nix/nix.conf, so enable flakes
-              # explicitly for the nix client that devenv invokes.
-              NIX_CONFIG = "experimental-features = nix-command flakes";
-            } // extraEnv;
-            allowedDomains = baseAllowedDomains 
-              // builtins.listToAttrs (map (d: {
-                name = d;
-                value = "*";
-              }) extraAllowedDomains);
-          };
+          mkOpencode = { extraAllowedDomains ? [ ], extraEnv ? { } }:
+            let
+              sandboxPackages = sbx.commonTools
+                ++ (with pkgs; [
+                  cargo
+                  rustc
+                  nodejs_22
+                  yarn
+                  foundry
+                ]);
+              # The sandbox's fixed toolchain. The active devenv profile is
+              # prepended at launch, so whatever the target repo's devenv
+              # installs wins over these.
+              sandboxPath = pkgs.lib.makeBinPath (sandboxPackages ++ [ pkgs.bashInteractive ]);
+            in
+            sbx.mkSandbox {
+              pkg = llm-agents.packages.${system}.opencode;
+              binName = "opencode";
+              outName = "opencode";
+              allowedPackages = sandboxPackages;
+              # opencode's own state (sessions, db) is left to the masked home:
+              # writable and ephemeral, discarded at exit. Nothing on the host is
+              # written outside the project directory.
+              rwDirs = [ ];
+              # The whole store is bound read-only so the devenv profile's
+              # binaries and their libraries resolve. This exposes every
+              # package in the store, not just the ones on PATH.
+              roDirs = [ "$HOME/.config/opencode" "/nix/store" ];
+              roFiles = [
+                "$HOME/.local/share/opencode/auth.json"
+              ];
+              env = {
+                # opencode's CLI talks to its local background service over
+                # loopback; it must bypass the filtering proxy.
+                NO_PROXY = "localhost,127.0.0.1,::1";
+                OPENCODE_ENABLE_EXA = "1";
+                OPENCODE_WEBSEARCH_PROVIDER = "exa";
+                # Prepend the active devenv profile (set by `devenv shell`) so
+                # the repo's tools are on PATH, then the sandbox's fixed
+                # toolchain. The profile is empty when not launched from a
+                # devenv shell.
+                PATH = "\${DEVENV_PROFILE:+$DEVENV_PROFILE/bin:}${sandboxPath}";
+              } // extraEnv;
+              allowedDomains = baseAllowedDomains
+                // builtins.listToAttrs (map (d: {
+                  name = d;
+                  value = "*";
+                }) extraAllowedDomains);
+            };
 
           mkRalph = opencode: pkgs.runCommand "ralph" {
             nativeBuildInputs = with pkgs; [ makeWrapper ];

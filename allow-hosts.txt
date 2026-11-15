@@ -25,6 +25,3 @@ yarnpkg.com
 # --- source hosting (git fetch, release downloads) ---
 github.com
 githubusercontent.com
-# --- nix / devenv (flake inputs, binary caches) ---
-nixos.org
-cachix.org
