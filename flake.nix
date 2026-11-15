@@ -69,8 +69,7 @@
           # opencode v1 (matches the version ralph was built against; the host
           # runs 1.18.29 and uses the v1 config format). Switch to the v2 CLI
           # by using `pkg = pkgs.opencode;` instead.
-          mkOpencode = { extraAllowedDomains ? [ ] }: 
-            sbx.mkSandbox {
+          mkOpencode = { extraAllowedDomains ? [ ], extraEnv ? { } }: sbx.mkSandbox {
             pkg = llm-agents.packages.${system}.opencode;
             binName = "opencode";
             outName = "opencode";
@@ -94,7 +93,7 @@
               # opencode's CLI talks to its local background service over
               # loopback; it must bypass the filtering proxy.
               NO_PROXY = "localhost,127.0.0.1,::1";
-            };
+            } // extraEnv;
             allowedDomains = baseAllowedDomains 
               // builtins.listToAttrs (map (d: {
                 name = d;
