@@ -88,7 +88,14 @@
                 nodejs_22
                 yarn
                 foundry
+                devenv
               ]);
+            # devenv shells out to nix, so the sandbox needs the nix store and
+            # the daemon socket. allowNix binds /nix/store and /nix/var
+            # read-only, puts nix on PATH, and binds the daemon socket;
+            # agent-sandbox requires allowUnixSockets for the daemon socket.
+            allowNix = true;
+            allowUnixSockets = true;
             # opencode's own state (sessions, db) is left to the masked home:
             # writable and ephemeral, discarded at exit. Nothing on the host is
             # written outside the project directory.
@@ -103,6 +110,9 @@
               NO_PROXY = "localhost,127.0.0.1,::1";
               OPENCODE_ENABLE_EXA = "1";
               OPENCODE_WEBSEARCH_PROVIDER = "exa";
+              # The sandbox does not see /etc/nix/nix.conf, so enable flakes
+              # explicitly for the nix client that devenv invokes.
+              NIX_CONFIG = "experimental-features = nix-command flakes";
             } // extraEnv;
             allowedDomains = baseAllowedDomains 
               // builtins.listToAttrs (map (d: {

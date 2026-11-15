@@ -21,6 +21,7 @@ opencode is wrapped with [agent-sandbox.nix](https://github.com/archie-judd/agen
 | the directory you launch from (`$PWD`) | read-write |
 | `~/.config/opencode` | read-only |
 | `~/.local/share/opencode/auth.json`, `~/.cache/opencode/models.json` | read-only |
+| `/nix/store`, `/nix/var`, the nix daemon socket | read-only (for `devenv`/`nix`) |
 | synthetic `$HOME`, `/tmp`, `/run` | writable, ephemeral (discarded on exit) |
 | everything else (other projects, keys, dotfiles, `/usr`…) | invisible |
 
@@ -33,7 +34,18 @@ opencode is wrapped with [agent-sandbox.nix](https://github.com/archie-judd/agen
   that honors the proxy env (opencode, curl, git, cargo, npm), not a hard
   kernel boundary.
 - The toolchain on PATH inside the sandbox is `commonTools` + cargo, rustc,
-  nodejs_22, yarn, foundry — enough to build/test this kind of project.
+  nodejs_22, yarn, foundry, devenv, nix — enough to build/test this kind of
+  project.
+
+### devenv in the sandbox
+
+`devenv` and `nix` are on PATH inside the sandbox, so opencode can enter the
+target repo's devenv environment (`devenv shell -c "..."`, `devenv test`,
+etc.) instead of relying on the fixed toolchain above. This requires
+`allowNix` and `allowUnixSockets` in `mkOpencode`: the sandbox gets the nix
+store and daemon socket read-only, and the AF_UNIX deny filter is disabled.
+The nix daemon substitutes and builds on the host, so those fetches are not
+subject to the proxy allowlist. The host nix daemon must be running.
 
 ## Usage
 
@@ -188,5 +200,11 @@ move it before running ralph (it also fails ralph's clean-tree check).
 - **Allowlist**: add domains via `extraAllowedDomains` in your `devenv.nix`;
   see [Whitelisting domains](#whitelisting-domains) and
   [Following the proxy to see failures](#following-the-proxy-to-see-failures).
-- **Requirements**: nix with flakes; on Linux, bwrap needs user namespaces
-  (default on NixOS; Ubuntu 24.04 needs the `bwrap-userns-restrict` profile).
+- **devenv/nix access**: `mkOpencode` enables `allowNix` and
+  `allowUnixSockets`, so the sandbox sees the nix store and daemon socket and
+  the AF_UNIX deny filter is off. The daemon fetches/builds on the host, so
+  those fetches bypass the proxy allowlist. This is a deliberate relaxation
+  to let opencode use the target repo's devenv environment.
+- **Requirements**: nix with flakes and a running nix daemon (for `devenv`
+  inside the sandbox); on Linux, bwrap needs user namespaces (default on
+  NixOS; Ubuntu 24.04 needs the `bwrap-userns-restrict` profile).

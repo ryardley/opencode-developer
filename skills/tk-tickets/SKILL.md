@@ -13,7 +13,8 @@ and should be committed.
 ## Finding tk
 
 `tk` is installed via devenv, so it is on `PATH` inside the devenv shell
-(`devenv shell` or direnv). If `tk` is not on `PATH`, run it through devenv:
+(`devenv shell` or direnv). If `tk` is not on `PATH`, run it through devenv
+(available inside the sandbox too):
 
 ```sh
 devenv shell -c "tk <command>"
