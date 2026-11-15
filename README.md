@@ -1,4 +1,4 @@
-# opencode-developer.nix
+# opencode-developer
 
 Work through tk-tickets one at a time with a **sandboxed** opencode.
 
