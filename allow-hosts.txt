@@ -1,0 +1,27 @@
+# ralph sandbox network allowlist
+# One host per line; '#' starts a comment. Suffix-matched, so "crates.io"
+# also allows index.crates.io / static.crates.io.
+# Edit this file and rebuild (`nix build .#opencode`) to change policy.
+# The filtering proxy logs every allowed/blocked request; see
+# `~/.local/state/agent-sandbox/<latest>/proxy.log` to trim or extend.
+
+# --- opencode model providers (add whichever you configure) ---
+anthropic.com
+openai.com
+googleapis.com
+togetherai.com
+fireworks.ai
+mistral.ai
+groq.com
+# --- web search ---
+exa.ai
+# --- model registry (cached model list; v1 fetches when cache is empty) ---
+models.dev
+
+# --- package registries (needed for cargo build / npm / yarn) ---
+crates.io
+npmjs.org
+yarnpkg.com
+# --- source hosting (git fetch, release downloads) ---
+github.com
+githubusercontent.com
