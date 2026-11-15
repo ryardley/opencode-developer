@@ -119,6 +119,16 @@
                 # toolchain. The profile is empty when not launched from a
                 # devenv shell.
                 PATH = "\${DEVENV_PROFILE:+$DEVENV_PROFILE/bin:}${sandboxPath}";
+                # The sandbox masks $HOME, so git cannot read the host's global
+                # gitconfig and `git commit` would fail with no declared
+                # identity. Resolve the identity from the host's git config at
+                # launch and pass it in as env vars. The values are shell
+                # expressions expanded on the host before the sandbox starts.
+                # Override by passing extraEnv or setting user.name/user.email.
+                GIT_AUTHOR_NAME = "\"$(git config user.name)\"";
+                GIT_AUTHOR_EMAIL = "\"$(git config user.email)\"";
+                GIT_COMMITTER_NAME = "\"$(git config user.name)\"";
+                GIT_COMMITTER_EMAIL = "\"$(git config user.email)\"";
               } // extraEnv;
               allowedDomains = baseAllowedDomains
                 // builtins.listToAttrs (map (d: {

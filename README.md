@@ -198,6 +198,11 @@ move it before running ralph (it also fails ralph's clean-tree check).
 - **Auth** comes from the host `~/.local/share/opencode/auth.json`, mounted
   read-only. Tokens that need refreshing will expire; re-run opencode on the
   host to refresh, or pass keys via `env`/`injectedCredentials`.
+- **Git identity**: the sandbox masks `$HOME`, so git cannot read the host's
+  global gitconfig and `git commit` would fail ("no git identity declared").
+  `mkOpencode` passes the host's identity in via `GIT_AUTHOR_*` /
+  `GIT_COMMITTER_*`, resolved from the host's git config at launch. Override
+  with `extraEnv` or a repo-local `user.name`/`user.email` in the target repo.
 - **Allowlist**: add domains via `extraAllowedDomains` in your `devenv.nix`;
   see [Whitelisting domains](#whitelisting-domains) and
   [Following the proxy to see failures](#following-the-proxy-to-see-failures).
