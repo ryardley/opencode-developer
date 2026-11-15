@@ -88,7 +88,6 @@
             roDirs = [ "$HOME/.config/opencode" ];
             roFiles = [
               "$HOME/.local/share/opencode/auth.json"
-              "$HOME/.cache/opencode/models.json"
             ];
             env = {
               # opencode's CLI talks to its local background service over
