@@ -26,7 +26,7 @@
       # Domain allowlist for the sandbox's filtering proxy, read from
       # allow-hosts.txt (one host per line, '#' comments). Matched by suffix,
       # so "crates.io" also allows static.crates.io.
-      allowedDomains = let
+      baseAllowedDomains = let
         lib = nixpkgs.lib;
         lines = lib.splitString "\n" (builtins.readFile ./allow-hosts.txt);
         entries = builtins.filter (l: l != "" && !(lib.hasPrefix "#" l)) (map lib.trim lines);
@@ -36,7 +36,7 @@
       }) entries);
     in
     {
-      packages = forAllSystems (
+      lib = forAllSystems (
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
@@ -69,7 +69,8 @@
           # opencode v1 (matches the version ralph was built against; the host
           # runs 1.18.29 and uses the v1 config format). Switch to the v2 CLI
           # by using `pkg = pkgs.opencode;` instead.
-          opencode = sbx.mkSandbox {
+          mkOpencode = { extraAllowedDomains ? [ ] }: 
+            sbx.mkSandbox {
             pkg = llm-agents.packages.${system}.opencode;
             binName = "opencode";
             outName = "opencode";
@@ -94,10 +95,14 @@
               # loopback; it must bypass the filtering proxy.
               NO_PROXY = "localhost,127.0.0.1,::1";
             };
-            allowedDomains = allowedDomains;
+            allowedDomains = baseAllowedDomains 
+              // builtins.listToAttrs (map (d: {
+                name = d;
+                value = "*";
+              }) extraAllowedDomains);
           };
 
-          ralph = pkgs.writeShellApplication {
+          mkRalph = opencode: pkgs.writeShellApplication {
             name = "ralph";
             runtimeInputs = with pkgs; [
               coreutils
@@ -112,8 +117,19 @@
           };
         in
         {
-          inherit tk ralph;
-          inherit opencode;
+          inherit tk mkOpencode mkRalph;
+        }
+      );
+      packages = forAllSystems (
+        system:
+        let
+          lib = self.lib.${system};
+          opencode = lib.mkOpencode { };
+          ralph = lib.mkRalph opencode;
+        in
+        {
+          inherit (lib) tk;
+          inherit opencode rakph;
           # Raw (unsandboxed) opencode, for debugging.
           opencode-raw = llm-agents.packages.${system}.opencode;
           default = ralph;
