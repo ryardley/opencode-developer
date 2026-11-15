@@ -129,7 +129,7 @@
         in
         {
           inherit (lib) tk;
-          inherit opencode rakph;
+          inherit opencode ralph;
           # Raw (unsandboxed) opencode, for debugging.
           opencode-raw = llm-agents.packages.${system}.opencode;
           default = ralph;
