@@ -151,6 +151,30 @@ kept. Only traffic that honors `HTTP_PROXY`/`HTTPS_PROXY` is filtered
 (opencode, curl, git, cargo, npm); loopback is in `NO_PROXY` so opencode's
 local service works.
 
+## Bundled tk-tickets skill
+
+The flake ships the `tk-tickets` opencode skill (source:
+`skills/tk-tickets/SKILL.md`). Each non-dry-run `ralph` invocation syncs it
+into the target repo's `.opencode/skills/tk-tickets/SKILL.md` (overwriting any
+drift) and commits it if new, so both the sandboxed opencode runs and
+interactive opencode in that repo discover it via project skills. If the file
+already matches, nothing is written.
+
+Verify discovery in a target repo with:
+
+```sh
+opencode debug skill   # should list tk-tickets
+```
+
+`tk-tickets` is also exposed as `self.packages.<system>.tk-tickets-skill` and
+`self.lib.<system>.tkTicketsSkill` for manual installs (e.g. copy its
+`SKILL.md` into `~/.config/opencode/skills/` for a host-global install).
+
+Note: opencode only discovers project skills under `.opencode/skill/` or
+`.opencode/skills/` — a file at `.opencode/tk-ticket/SKILL.md` (or any
+non-`skill(s)` directory) is silently ignored. If your repo has such a file,
+move it before running ralph (it also fails ralph's clean-tree check).
+
 ## Notes
 
 - **opencode is v1** (via `numtide/llm-agents.nix#opencode`), matching the

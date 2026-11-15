@@ -46,6 +46,33 @@ EOF
 
 die() { echo "error: $*" >&2; exit 1; }
 
+# Bundled tk-tickets opencode skill, shipped in ralph's own store path
+# ($out/share/tk-tickets/SKILL.md). Kept in the target repo's
+# `.opencode/skills/` so opencode (sandboxed or interactive) discovers it.
+SKILL_SRC="$(dirname "$(readlink -f "$0")")/../share/tk-tickets/SKILL.md"
+SKILL_DST="$ROOT/.opencode/skills/tk-tickets/SKILL.md"
+
+sync_skill() {
+  if [[ ! -f "$SKILL_SRC" ]]; then
+    echo "warning: bundled tk-tickets skill not found ($SKILL_SRC); skipping install" >&2
+    return 0
+  fi
+  mkdir -p "$(dirname "$SKILL_DST")"
+  if [[ -f "$SKILL_DST" ]] && cmp -s "$SKILL_SRC" "$SKILL_DST"; then
+    return 0
+  fi
+  # The store source is read-only; recreate with a writable mode so the
+  # installed skill stays editable and idempotent overwrites succeed.
+  rm -f "$SKILL_DST"
+  install -m 0644 "$SKILL_SRC" "$SKILL_DST"
+  # Force-add (in case `.opencode/` is gitignored) and commit only if the
+  # working tree actually changed, keeping the tree clean for the ticket loop.
+  git add -f "$SKILL_DST"
+  if ! git diff --cached --quiet -- "$SKILL_DST"; then
+    git commit -q -m "chore: sync tk-tickets skill"
+  fi
+}
+
 ONLY=""
 DRY_RUN=0
 while [[ $# -gt 0 ]]; do
@@ -78,6 +105,7 @@ if (( ! DRY_RUN )); then
     git status --short >&2
     exit 1
   fi
+  sync_skill
 fi
 
 LOGDIR="$ROOT/.ralph/logs"

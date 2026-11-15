@@ -66,6 +66,14 @@
             '';
           };
 
+          # The tk-tickets opencode skill (SKILL.md) bundled with the flake.
+          # ralph installs it into each target repo's `.opencode/skills/` so
+          # both sandboxed and interactive opencode discover it.
+          tkTicketsSkill = pkgs.writeTextFile {
+            name = "tk-tickets-skill";
+            text = builtins.readFile ./skills/tk-tickets/SKILL.md;
+          };
+
           # opencode v1 (matches the version ralph was built against; the host
           # runs 1.18.29 and uses the v1 config format). Switch to the v2 CLI
           # by using `pkg = pkgs.opencode;` instead.
@@ -103,22 +111,26 @@
               }) extraAllowedDomains);
           };
 
-          mkRalph = opencode: pkgs.writeShellApplication {
-            name = "ralph";
-            runtimeInputs = with pkgs; [
-              coreutils
-              gnused
-              gawk
-              gnugrep
-              git
-              tk
-              opencode
-            ];
-            text = builtins.readFile ./ralph.sh;
-          };
+          mkRalph = opencode: pkgs.runCommand "ralph" {
+            nativeBuildInputs = with pkgs; [ makeWrapper ];
+          } ''
+            mkdir -p "$out/bin" "$out/share/tk-tickets"
+            install -m 0755 ${./ralph.sh} "$out/bin/ralph"
+            install -m 0644 ${tkTicketsSkill} "$out/share/tk-tickets/SKILL.md"
+            wrapProgram "$out/bin/ralph" \
+              --prefix PATH : "${pkgs.lib.makeBinPath (with pkgs; [
+                coreutils
+                gnused
+                gawk
+                gnugrep
+                git
+                tk
+                opencode
+              ])}"
+          '';
         in
         {
-          inherit tk mkOpencode mkRalph;
+          inherit tk tkTicketsSkill mkOpencode mkRalph;
         }
       );
       packages = forAllSystems (
@@ -130,6 +142,7 @@
         in
         {
           inherit (lib) tk;
+          tk-tickets-skill = lib.tkTicketsSkill;
           inherit opencode ralph;
           # Raw (unsandboxed) opencode, for debugging.
           opencode-raw = llm-agents.packages.${system}.opencode;
