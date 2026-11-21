@@ -66,6 +66,26 @@
             '';
           };
 
+          # tkt (github.com/lawrips/tkt), a TUI for inspecting tickets.
+          tkt = pkgs.buildGoModule {
+            pname = "tkt";
+            version = "unstable-2026-11-21";
+
+            src = pkgs.fetchFromGitHub {
+              owner = "lawrips";
+              repo = "tkt";
+              rev = "87795652ce0ca2f4bf07115504ae825c12b82e94";
+              hash = "sha256-iGtBYujnhY+xmzDeh5Uu4dcwdjYrEhBy77J6UbYrGHU=";
+            };
+
+            vendorHash = "sha256-ESMJUW7egfyEdV2WgQtxgkX45KbB6ytww+ft3rxEUms=";
+
+            subPackages = [ "cmd/tkt" ];
+
+            doCheck = false;
+            meta.mainProgram = "tkt";
+          };
+
           # The tk-tickets opencode skill (SKILL.md) bundled with the flake.
           # ralph installs it into each target repo's `.opencode/skills/` so
           # both sandboxed and interactive opencode discover it.
@@ -156,7 +176,7 @@
           '';
         in
         {
-          inherit tk tkTicketsSkill mkOpencode mkRalph;
+          inherit tk tkt tkTicketsSkill mkOpencode mkRalph;
         }
       );
       packages = forAllSystems (
@@ -167,7 +187,7 @@
           ralph = lib.mkRalph opencode;
         in
         {
-          inherit (lib) tk;
+          inherit (lib) tk tkt;
           tk-tickets-skill = lib.tkTicketsSkill;
           inherit opencode ralph;
           # Raw (unsandboxed) opencode, for debugging.
@@ -186,6 +206,7 @@
             packages = [
               self.packages.${system}.ralph
               self.packages.${system}.tk
+              self.packages.${system}.tkt
               self.packages.${system}.opencode
             ];
             shellHook = ''
