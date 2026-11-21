@@ -163,7 +163,7 @@ implementer_prompt() {
 You are implementing tk ticket $id: $title in this repository.
 
 Steps:
-1. Read docs/AGENTS.md for orientation.
+1. Read **/AGENTS.md for orientation if it exists.
 2. Run \`tk show $id\` (or read .tickets/$id.md) for the full ticket: Description, Design, Acceptance Criteria, References.
 3. Implement per the Design to satisfy every item in the Acceptance Criteria.
 4. Run the relevant build/tests (e.g. cargo test, yarn test, bean-check) to confirm your work.
@@ -182,7 +182,7 @@ verifier_prompt() {
 Independently verify that tk ticket $id: $title is complete in this repository.
 
 Steps:
-1. Read docs/AGENTS.md.
+1. Read **/AGENTS.md for orientation if it exists.
 2. Run \`tk show $id\` to read its Acceptance Criteria.
 3. Inspect the working tree / git diff and the relevant code; check each acceptance criterion.
 4. Run the relevant build/tests named in the ticket.
