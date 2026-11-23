@@ -57,11 +57,12 @@ in
     ];
 
     # Rootless podman maps the runner's subuid/subgid ranges via
-    # newuidmap/newgidmap. These must be setuid-root so the unprivileged
-    # container-runner user can apply the mapping; without them every
-    # `podman system service` start fails with
-    #   exec: "newuidmap": executable file not found in $PATH
-    security.wrappers = {
+    # newuidmap/newgidmap. NixOS's shadow module (enabled by default) already
+    # provides these wrappers with file capabilities, so only add setuid
+    # fallbacks when shadow is disabled. Defining both setuid and capabilities
+    # for the same wrapper fails the security.wrappers assertion:
+    #   setuid/setgid and capabilities are mutually exclusive.
+    security.wrappers = lib.mkIf (!config.security.shadow.enable) {
       newuidmap = {
         owner = "root";
         group = "root";
@@ -82,9 +83,9 @@ in
       group = cfg.group;
       home = "/var/lib/${cfg.user}";
       createHome = true;
-      # Adjust if these overlap another user's subordinate ID range.
-      subUidRanges = [ { startUid = 100000; count = 65536; } ];
-      subGidRanges = [ { startGid = 100000; count = 65536; } ];
+      # Let NixOS allocate a non-overlapping range. A hardcoded 100000 collides
+      # with the auto-allocated range the host's normal user also receives.
+      autoSubUidGidRange = true;
       # Start the user's systemd instance at boot so the API comes up without
       # a login.
       linger = true;
