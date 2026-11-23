@@ -73,6 +73,7 @@ in
   packages = [
     (od.mkRalph opencode)
     od.mkArchive
+    od.mkKillRalph
     od.tk
   ];
 }
@@ -109,6 +110,22 @@ archive             # git rm closed tickets and commit
 It requires a clean working tree (the `.ralph/` log dir is ignored) and writes
 its log to `.ralph/archive-<timestamp>.log`. Override the commit message with
 `ARCHIVE_COMMIT_MESSAGE`.
+
+### Stopping a run
+
+`kill-ralph` stops a running ralph loop. It finds the ralph process and every
+descendant (the `timeout`/`opencode run` children for the current attempt),
+sends `SIGTERM`, and escalates to `SIGKILL` for anything still alive after a
+grace period. The ticket being worked on is left `in_progress`, so re-running
+`ralph <id>` picks it back up.
+
+```sh
+kill-ralph --dry-run   # list the processes that would be killed
+kill-ralph             # SIGTERM, then SIGKILL after 10s
+kill-ralph --force     # SIGKILL immediately
+```
+
+Set `KILL_RALPH_GRACE` to change the seconds to wait before `SIGKILL`.
 
 ### Whitelisting domains
 

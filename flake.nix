@@ -191,9 +191,23 @@
                 git
               ])}"
           '';
+
+          # kill-ralph: stop a running ralph loop and its opencode children.
+          # procps (pgrep/ps) is Linux-only; on darwin the system tools are
+          # used from the inherited PATH.
+          mkKillRalph = pkgs.runCommand "kill-ralph" {
+            nativeBuildInputs = with pkgs; [ makeWrapper ];
+          } ''
+            mkdir -p "$out/bin"
+            install -m 0755 ${./kill-ralph.sh} "$out/bin/kill-ralph"
+            wrapProgram "$out/bin/kill-ralph" \
+              --prefix PATH : "${pkgs.lib.makeBinPath (
+                with pkgs; [ coreutils ] ++ lib.optional stdenv.isLinux procps
+              )}"
+          '';
         in
         {
-          inherit tk tkt tkTicketsSkill mkOpencode mkRalph mkArchive;
+          inherit tk tkt tkTicketsSkill mkOpencode mkRalph mkArchive mkKillRalph;
         }
       );
       packages = forAllSystems (
@@ -203,11 +217,12 @@
           opencode = lib.mkOpencode { };
           ralph = lib.mkRalph opencode;
           archive = lib.mkArchive;
+          kill-ralph = lib.mkKillRalph;
         in
         {
           inherit (lib) tk tkt;
           tk-tickets-skill = lib.tkTicketsSkill;
-          inherit opencode ralph archive;
+          inherit opencode ralph archive kill-ralph;
           # Raw (unsandboxed) opencode, for debugging.
           opencode-raw = llm-agents.packages.${system}.opencode;
           default = ralph;
@@ -224,6 +239,7 @@
             packages = [
               self.packages.${system}.ralph
               self.packages.${system}.archive
+              self.packages.${system}.kill-ralph
               self.packages.${system}.tk
               self.packages.${system}.tkt
               self.packages.${system}.opencode
@@ -232,7 +248,8 @@
               echo "ralph: tk-ticket driver with a sandboxed opencode (v1 via llm-agents.nix)."
               echo "  cd <repo-with-.tickets> && ralph --dry-run"
               echo "  archive: delete closed tk tickets"
-              echo "  ralph, archive, tk, opencode are on PATH."
+              echo "  kill-ralph: stop a running ralph loop"
+              echo "  ralph, archive, kill-ralph, tk, opencode are on PATH."
             '';
           };
         }
