@@ -99,6 +99,12 @@ in
       "d /var/lib/${cfg.user}/.config 0755 ${cfg.user} ${cfg.group} -"
       "d /var/lib/${cfg.user}/.config/containers 0755 ${cfg.user} ${cfg.group} -"
       "L+ /var/lib/${cfg.user}/.config/containers/policy.json - - - - ${pkgs.writeText "container-runner-policy.json" (builtins.toJSON { default = [ { type = "insecureAcceptAnything"; } ]; })}"
+      # Pre-create the rootless storage graph so the first `podman` run does not
+      # race creating it (and crash-loop) on a fresh boot.
+      "d /var/lib/${cfg.user}/.local 0755 ${cfg.user} ${cfg.group} -"
+      "d /var/lib/${cfg.user}/.local/share 0755 ${cfg.user} ${cfg.group} -"
+      "d /var/lib/${cfg.user}/.local/share/containers 0755 ${cfg.user} ${cfg.group} -"
+      "d /var/lib/${cfg.user}/.local/share/containers/storage 0755 ${cfg.user} ${cfg.group} -"
     ];
 
     systemd.user.services.podman-api = {
@@ -117,7 +123,13 @@ in
         # future flap is diagnosable from the journal rather than a bare
         # "address already in use". Non-fatal: the bind below still decides.
         ExecStartPre = "${pkgs.bash}/bin/bash -c '${pkgs.iproute2}/bin/ss -ltn 2>/dev/null | grep -F 127.0.0.1:${toString cfg.port} || true'";
-        ExecStart = "${pkgs.podman}/bin/podman system service --time=0 tcp://127.0.0.1:${toString cfg.port}";
+        # Rootless podman does one-time setup (storage graph, network) on its
+        # first invocation. If that setup fails, `podman system service` exits
+        # 125 and the sidecar crash-loops until someone runs podman by hand.
+        # Initialize it here, in the main process, so a fresh boot waits for
+        # init to succeed before binding. Doing it in ExecStart (not
+        # ExecStartPre) means Restart=on-failure applies if init keeps failing.
+        ExecStart = "${pkgs.bash}/bin/bash -c 'i=0; until ${pkgs.podman}/bin/podman info >/dev/null 2>&1; do i=$((i+1)); if [ $i -ge 60 ]; then echo \"podman init failed after 60s\" >&2; exit 1; fi; ${pkgs.coreutils}/bin/sleep 1; done; exec ${pkgs.podman}/bin/podman system service --time=0 tcp://127.0.0.1:${toString cfg.port}'";
         Restart = "on-failure";
         RestartSec = 2;
       };
