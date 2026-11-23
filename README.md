@@ -72,6 +72,7 @@ in
 {
   packages = [
     (od.mkRalph opencode)
+    od.mkArchive
     od.tk
   ];
 }
@@ -92,6 +93,22 @@ ralph pw-4hz9     # one ticket
 
 Env (same as before): `RALPH_MAX_ATTEMPTS` (3), `RALPH_MAX_ITERATIONS` (100),
 `RALPH_MODEL`, `RALPH_AGENT`.
+
+### Archiving closed tickets
+
+`archive` deletes closed tk tickets: every `.tickets/<id>.md` whose frontmatter
+has `status: closed` is `git rm`'d and committed, so it stops showing up in
+`tk closed` / `tk show` while git history keeps it. Open and in-progress
+tickets are untouched.
+
+```sh
+archive --dry-run   # list what would be removed
+archive             # git rm closed tickets and commit
+```
+
+It requires a clean working tree (the `.ralph/` log dir is ignored) and writes
+its log to `.ralph/archive-<timestamp>.log`. Override the commit message with
+`ARCHIVE_COMMIT_MESSAGE`.
 
 ### Whitelisting domains
 

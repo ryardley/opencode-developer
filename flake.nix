@@ -174,9 +174,26 @@
                 opencode
               ])}"
           '';
+
+          # archive: delete closed tk tickets (git rm + commit). No opencode
+          # needed, so it is a plain wrapper around archive.sh.
+          mkArchive = pkgs.runCommand "archive" {
+            nativeBuildInputs = with pkgs; [ makeWrapper ];
+          } ''
+            mkdir -p "$out/bin"
+            install -m 0755 ${./archive.sh} "$out/bin/archive"
+            wrapProgram "$out/bin/archive" \
+              --prefix PATH : "${pkgs.lib.makeBinPath (with pkgs; [
+                coreutils
+                gnused
+                gawk
+                gnugrep
+                git
+              ])}"
+          '';
         in
         {
-          inherit tk tkt tkTicketsSkill mkOpencode mkRalph;
+          inherit tk tkt tkTicketsSkill mkOpencode mkRalph mkArchive;
         }
       );
       packages = forAllSystems (
@@ -185,11 +202,12 @@
           lib = self.lib.${system};
           opencode = lib.mkOpencode { };
           ralph = lib.mkRalph opencode;
+          archive = lib.mkArchive;
         in
         {
           inherit (lib) tk tkt;
           tk-tickets-skill = lib.tkTicketsSkill;
-          inherit opencode ralph;
+          inherit opencode ralph archive;
           # Raw (unsandboxed) opencode, for debugging.
           opencode-raw = llm-agents.packages.${system}.opencode;
           default = ralph;
@@ -205,6 +223,7 @@
           default = pkgs.mkShell {
             packages = [
               self.packages.${system}.ralph
+              self.packages.${system}.archive
               self.packages.${system}.tk
               self.packages.${system}.tkt
               self.packages.${system}.opencode
@@ -212,7 +231,8 @@
             shellHook = ''
               echo "ralph: tk-ticket driver with a sandboxed opencode (v1 via llm-agents.nix)."
               echo "  cd <repo-with-.tickets> && ralph --dry-run"
-              echo "  ralph, tk, opencode are on PATH."
+              echo "  archive: delete closed tk tickets"
+              echo "  ralph, archive, tk, opencode are on PATH."
             '';
           };
         }
