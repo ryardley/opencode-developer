@@ -320,6 +320,16 @@ new, so both the sandboxed opencode runs and interactive opencode in that repo
 discover them via project skills. If a file already matches, nothing is
 written.
 
+To install them without starting a ralph loop, use `install-skills` (also
+`./install-skills.sh` from a checkout):
+
+```sh
+install-skills              # all skills into this repo, committed
+install-skills tk-tickets   # just one skill
+install-skills --global     # host-global (~/.config/opencode/skills)
+install-skills --dry-run    # preview
+```
+
 Verify discovery in a target repo with:
 
 ```sh

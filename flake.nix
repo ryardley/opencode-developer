@@ -220,6 +220,25 @@
               ])}"
           '';
 
+          # install-skills: install the bundled opencode skills into a repo or
+          # the host config without running ralph.
+          mkInstallSkills = pkgs.runCommand "install-skills" {
+            nativeBuildInputs = with pkgs; [ makeWrapper ];
+          } ''
+            mkdir -p "$out/bin" "$out/share/tk-tickets" "$out/share/podman"
+            install -m 0755 ${./install-skills.sh} "$out/bin/install-skills"
+            install -m 0644 ${tkTicketsSkill} "$out/share/tk-tickets/SKILL.md"
+            install -m 0644 ${podmanSkill} "$out/share/podman/SKILL.md"
+            wrapProgram "$out/bin/install-skills" \
+              --prefix PATH : "${pkgs.lib.makeBinPath (with pkgs; [
+                coreutils
+                gnused
+                gawk
+                gnugrep
+                git
+              ])}"
+          '';
+
           # kill-ralph: stop a running ralph loop and its opencode children.
           # procps (pgrep/ps) is Linux-only; on darwin the system tools are
           # used from the inherited PATH.
@@ -235,7 +254,7 @@
           '';
         in
         {
-          inherit tk tkt tkTicketsSkill podmanSkill mkOpencode mkRalph mkArchive mkKillRalph;
+          inherit tk tkt tkTicketsSkill podmanSkill mkOpencode mkRalph mkArchive mkInstallSkills mkKillRalph;
         }
       );
       packages = forAllSystems (
@@ -245,13 +264,14 @@
           opencode = lib.mkOpencode { };
           ralph = lib.mkRalph opencode;
           archive = lib.mkArchive;
+          install-skills = lib.mkInstallSkills;
           kill-ralph = lib.mkKillRalph;
         in
         {
           inherit (lib) tk tkt;
           tk-tickets-skill = lib.tkTicketsSkill;
           podman-skill = lib.podmanSkill;
-          inherit opencode ralph archive kill-ralph;
+          inherit opencode ralph archive install-skills kill-ralph;
           # Raw (unsandboxed) opencode, for debugging.
           opencode-raw = llm-agents.packages.${system}.opencode;
           default = ralph;
@@ -268,6 +288,7 @@
             packages = [
               self.packages.${system}.ralph
               self.packages.${system}.archive
+              self.packages.${system}.install-skills
               self.packages.${system}.kill-ralph
               self.packages.${system}.tk
               self.packages.${system}.tkt
@@ -277,8 +298,9 @@
               echo "ralph: tk-ticket driver with a sandboxed opencode (v1 via llm-agents.nix)."
               echo "  cd <repo-with-.tickets> && ralph --dry-run"
               echo "  archive: delete closed tk tickets"
+              echo "  install-skills: install the bundled opencode skills without ralph"
               echo "  kill-ralph: stop a running ralph loop"
-              echo "  ralph, archive, kill-ralph, tk, opencode are on PATH."
+              echo "  ralph, archive, install-skills, kill-ralph, tk, opencode are on PATH."
             '';
           };
         }
