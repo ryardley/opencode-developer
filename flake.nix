@@ -94,10 +94,22 @@
             text = builtins.readFile ./skills/tk-tickets/SKILL.md;
           };
 
+          # The podman opencode skill (SKILL.md) bundled with the flake. ralph
+          # installs it alongside tk-tickets so the agent knows how to run a
+          # compose stack through the container sidecar.
+          podmanSkill = pkgs.writeTextFile {
+            name = "podman-skill";
+            text = builtins.readFile ./skills/podman/SKILL.md;
+          };
+
           # opencode v1 (matches the version ralph was built against; the host
           # runs 1.18.29 and uses the v1 config format). Switch to the v2 CLI
           # by using `pkg = pkgs.opencode;` instead.
-          mkOpencode = { extraAllowedDomains ? [ ], extraEnv ? { } }:
+          mkOpencode = {
+            extraAllowedDomains ? [ ],
+            extraEnv ? { },
+            containerSidecar ? null,
+          }:
             let
               sandboxPackages = sbx.commonTools
                 ++ (with pkgs; [
@@ -106,11 +118,17 @@
                   nodejs_22
                   yarn
                   foundry
+                ])
+                ++ pkgs.lib.optionals (containerSidecar != null) (with pkgs; [
+                  podman
+                  podman-compose
                 ]);
               # The sandbox's fixed toolchain. The active devenv profile is
               # prepended at launch, so whatever the target repo's devenv
               # installs wins over these.
               sandboxPath = pkgs.lib.makeBinPath (sandboxPackages ++ [ pkgs.bashInteractive ]);
+              sidecarPort =
+                if containerSidecar != null then (containerSidecar.port or 2375) else null;
             in
             sbx.mkSandbox {
               pkg = llm-agents.packages.${system}.opencode;
@@ -128,6 +146,10 @@
               roFiles = [
                 "$HOME/.local/share/opencode/auth.json"
               ];
+              # The container sidecar's API is a host-local TCP service. Only
+              # allow its port when the caller opted in, so a host without the
+              # sidecar does not get a broken podman or an open port.
+              allowedHostPorts = pkgs.lib.optional (containerSidecar != null) sidecarPort;
               env = {
                 # opencode's CLI talks to its local background service over
                 # loopback; it must bypass the filtering proxy.
@@ -149,6 +171,11 @@
                 GIT_AUTHOR_EMAIL = "\"$(git config user.email)\"";
                 GIT_COMMITTER_NAME = "\"$(git config user.name)\"";
                 GIT_COMMITTER_EMAIL = "\"$(git config user.email)\"";
+              } // pkgs.lib.optionalAttrs (containerSidecar != null) {
+                # The sandbox reaches the sidecar's API through allowedHostPorts
+                # above; loopback is in NO_PROXY, so the connection bypasses the
+                # filtering proxy.
+                CONTAINER_HOST = "tcp://127.0.0.1:${toString sidecarPort}";
               } // extraEnv;
               allowedDomains = baseAllowedDomains
                 // builtins.listToAttrs (map (d: {
@@ -160,9 +187,10 @@
           mkRalph = opencode: pkgs.runCommand "ralph" {
             nativeBuildInputs = with pkgs; [ makeWrapper ];
           } ''
-            mkdir -p "$out/bin" "$out/share/tk-tickets"
+            mkdir -p "$out/bin" "$out/share/tk-tickets" "$out/share/podman"
             install -m 0755 ${./ralph.sh} "$out/bin/ralph"
             install -m 0644 ${tkTicketsSkill} "$out/share/tk-tickets/SKILL.md"
+            install -m 0644 ${podmanSkill} "$out/share/podman/SKILL.md"
             wrapProgram "$out/bin/ralph" \
               --prefix PATH : "${pkgs.lib.makeBinPath (with pkgs; [
                 coreutils
@@ -207,7 +235,7 @@
           '';
         in
         {
-          inherit tk tkt tkTicketsSkill mkOpencode mkRalph mkArchive mkKillRalph;
+          inherit tk tkt tkTicketsSkill podmanSkill mkOpencode mkRalph mkArchive mkKillRalph;
         }
       );
       packages = forAllSystems (
@@ -222,6 +250,7 @@
         {
           inherit (lib) tk tkt;
           tk-tickets-skill = lib.tkTicketsSkill;
+          podman-skill = lib.podmanSkill;
           inherit opencode ralph archive kill-ralph;
           # Raw (unsandboxed) opencode, for debugging.
           opencode-raw = llm-agents.packages.${system}.opencode;
@@ -254,5 +283,7 @@
           };
         }
       );
+
+      nixosModules.containerSidecar = import ./nix/container-sidecar.nix;
     };
 }

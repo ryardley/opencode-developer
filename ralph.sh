@@ -46,31 +46,40 @@ EOF
 
 die() { echo "error: $*" >&2; exit 1; }
 
-# Bundled tk-tickets opencode skill, shipped in ralph's own store path
-# ($out/share/tk-tickets/SKILL.md). Kept in the target repo's
-# `.opencode/skills/` so opencode (sandboxed or interactive) discovers it.
-SKILL_SRC="$(dirname "$(readlink -f "$0")")/../share/tk-tickets/SKILL.md"
-SKILL_DST="$ROOT/.opencode/skills/tk-tickets/SKILL.md"
+# Bundled opencode skills, shipped in ralph's own store path
+# ($out/share/<name>/SKILL.md). Kept in the target repo's
+# `.opencode/skills/` so opencode (sandboxed or interactive) discovers them.
+SKILLS_DIR="$(dirname "$(readlink -f "$0")")/../share"
 
 sync_skill() {
-  if [[ ! -f "$SKILL_SRC" ]]; then
-    echo "warning: bundled tk-tickets skill not found ($SKILL_SRC); skipping install" >&2
+  local name="$1"
+  local src="$SKILLS_DIR/$name/SKILL.md"
+  local dst="$ROOT/.opencode/skills/$name/SKILL.md"
+  if [[ ! -f "$src" ]]; then
+    echo "warning: bundled $name skill not found ($src); skipping install" >&2
     return 0
   fi
-  mkdir -p "$(dirname "$SKILL_DST")"
-  if [[ -f "$SKILL_DST" ]] && cmp -s "$SKILL_SRC" "$SKILL_DST"; then
+  mkdir -p "$(dirname "$dst")"
+  if [[ -f "$dst" ]] && cmp -s "$src" "$dst"; then
     return 0
   fi
   # The store source is read-only; recreate with a writable mode so the
   # installed skill stays editable and idempotent overwrites succeed.
-  rm -f "$SKILL_DST"
-  install -m 0644 "$SKILL_SRC" "$SKILL_DST"
+  rm -f "$dst"
+  install -m 0644 "$src" "$dst"
   # Force-add (in case `.opencode/` is gitignored) and commit only if the
   # working tree actually changed, keeping the tree clean for the ticket loop.
-  git add -f "$SKILL_DST"
-  if ! git diff --cached --quiet -- "$SKILL_DST"; then
-    git commit -q -m "chore: sync tk-tickets skill"
+  git add -f "$dst"
+  if ! git diff --cached --quiet -- "$dst"; then
+    git commit -q -m "chore: sync $name skill"
   fi
+}
+
+sync_skills() {
+  local name
+  for name in tk-tickets podman; do
+    sync_skill "$name"
+  done
 }
 
 ONLY=""
@@ -105,7 +114,7 @@ if (( ! DRY_RUN )); then
     git status --short >&2
     exit 1
   fi
-  sync_skill
+  sync_skills
 fi
 
 LOGDIR="$ROOT/.ralph/logs"

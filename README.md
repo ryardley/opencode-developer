@@ -198,24 +198,138 @@ kept. Only traffic that honors `HTTP_PROXY`/`HTTPS_PROXY` is filtered
 (opencode, curl, git, cargo, npm); loopback is in `NO_PROXY` so opencode's
 local service works.
 
-## Bundled tk-tickets skill
+## Running compose for tests (container sidecar)
 
-The flake ships the `tk-tickets` opencode skill (source:
-`skills/tk-tickets/SKILL.md`). Each non-dry-run `ralph` invocation syncs it
-into the target repo's `.opencode/skills/tk-tickets/SKILL.md` (overwriting any
-drift) and commits it if new, so both the sandboxed opencode runs and
-interactive opencode in that repo discover it via project skills. If the file
-already matches, nothing is written.
+The sandbox never gets the host's Docker socket. To let the agent write its own
+compose file and run a test against it, run a **dedicated-user rootless podman
+API** on the host and point the sandbox at it over TCP. The runner cannot read
+your home, so SSH keys and other secrets stay out of reach even when the
+agent's compose file asks for `--userns=host` or `-v /:/host`.
+
+### Host: enable the sidecar (NixOS)
+
+Add the flake as an input to the VM's NixOS config and import
+`nixosModules.containerSidecar` on the VMs that need it. The module enables the
+sidecar on import, so only VMs that import it get it:
+
+```nix
+{
+  inputs.opencode-developer.url = "github:ryardley/opencode-developer";
+
+  outputs = { self, nixpkgs, opencode-developer, ... }: {
+    nixosConfigurations.vm = nixpkgs.lib.nixosSystem {
+      modules = [
+        opencode-developer.nixosModules.containerSidecar
+        { services.containerSidecar.port = 2375; }
+      ];
+    };
+  };
+}
+```
+
+This creates a `container-runner` user (subuid/subgid, home `0700`, lingering)
+and a `podman-api` user service listening on `127.0.0.1:2375`. The existing
+rootful Docker is untouched, and the runner is not in the `docker` group.
+
+### Target repo: point the sandbox at it
+
+```nix
+{ pkgs, inputs, ... }:
+
+let
+  od = inputs.opencode-developer.lib.${pkgs.system};
+  opencode = od.mkOpencode {
+    containerSidecar = { port = 2375; };
+  };
+in
+{
+  packages = [
+    (od.mkRalph opencode)
+    od.tk
+  ];
+}
+```
+
+`containerSidecar` is opt-in. When set, `mkOpencode` adds `podman` and
+`podman-compose` to the sandbox, sets `CONTAINER_HOST=tcp://127.0.0.1:<port>`,
+and allows that port through `allowedHostPorts`. When it is `null` (the
+default), the sandbox has no container tooling and no open port — so a host
+without the sidecar does not get a broken `podman` that fails with
+`connection refused`.
+
+Grant the runner access to the repo so compose bind mounts and build contexts
+work. In the repo's `devenv.nix`:
+
+```nix
+{
+  packages = [ pkgs.acl ];
+  enterShell = ''
+    setfacl -R -m u:container-runner:rwX .
+    setfacl -R -d -m u:container-runner:rwX .
+  '';
+}
+```
+
+Add a runtime check so a missing sidecar is obvious:
+
+```sh
+curl -fsS http://127.0.0.1:2375/_ping >/dev/null 2>&1 \
+  || echo "warning: container sidecar not reachable on 127.0.0.1:2375"
+```
+
+### What the agent can do
+
+The agent writes `compose.test.yml` in the repo and runs:
+
+```sh
+podman-compose -f compose.test.yml up -d --wait
+# run the test, e.g. cargo test
+podman-compose -f compose.test.yml down -v
+```
+
+If the test runs in the sandbox (not as a compose service), add the service
+ports to `allowedHostPorts` too. If it runs as a compose service
+(`podman-compose run --rm tests`), only the API port is needed.
+
+### Security and limits
+
+- The runner is a separate user. `--userns=host` gives a container the
+  *runner's* identity, not yours; `-v /:/host` sees the runner's view, not your
+  home. `~/.ssh` stays unreadable.
+- The host's `/var/run/docker.sock` is never bound into the sandbox.
+- The API is unauthenticated and bound to `127.0.0.1`. On a single-user VM that
+  is fine; on a shared host, firewall the port to your uid.
+- Rootless podman's `--network=host` gives the host network namespace, so a
+  container can reach VM services. The VM is the boundary; if you need network
+  containment, use rootless Docker (whose `--network=host` is slirp4netns) or a
+  private netns.
+- The agent has root *inside* the runner's user namespace. That is the point,
+  and it is disposable.
+
+## Bundled opencode skills
+
+The flake ships two opencode skills:
+
+- `tk-tickets` (source: `skills/tk-tickets/SKILL.md`) — the tk ticket system.
+- `podman` (source: `skills/podman/SKILL.md`) — how to run a compose stack
+  through the container sidecar.
+
+Each non-dry-run `ralph` invocation syncs both into the target repo's
+`.opencode/skills/<name>/SKILL.md` (overwriting any drift) and commits them if
+new, so both the sandboxed opencode runs and interactive opencode in that repo
+discover them via project skills. If a file already matches, nothing is
+written.
 
 Verify discovery in a target repo with:
 
 ```sh
-opencode debug skill   # should list tk-tickets
+opencode debug skill   # should list tk-tickets and podman
 ```
 
-`tk-tickets` is also exposed as `self.packages.<system>.tk-tickets-skill` and
-`self.lib.<system>.tkTicketsSkill` for manual installs (e.g. copy its
-`SKILL.md` into `~/.config/opencode/skills/` for a host-global install).
+Both are also exposed as `self.packages.<system>.tk-tickets-skill` /
+`podman-skill` and `self.lib.<system>.tkTicketsSkill` / `podmanSkill` for
+manual installs (e.g. copy a `SKILL.md` into `~/.config/opencode/skills/` for a
+host-global install).
 
 Note: opencode only discovers project skills under `.opencode/skill/` or
 `.opencode/skills/` — a file at `.opencode/tk-ticket/SKILL.md` (or any
