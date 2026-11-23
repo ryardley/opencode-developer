@@ -91,6 +91,16 @@ in
       linger = true;
     };
 
+    # The rootless API needs a signature policy to pull and run images. Podman
+    # checks the runner's own config first, so scope the policy to the runner's
+    # home and leave the host's podman policy untouched. Public test images are
+    # unsigned, so accept them without verification.
+    systemd.tmpfiles.rules = [
+      "d /var/lib/${cfg.user}/.config 0755 ${cfg.user} ${cfg.group} -"
+      "d /var/lib/${cfg.user}/.config/containers 0755 ${cfg.user} ${cfg.group} -"
+      "L+ /var/lib/${cfg.user}/.config/containers/policy.json - - - - ${pkgs.writeText "container-runner-policy.json" (builtins.toJSON { default = [ { type = "insecureAcceptAnything"; } ]; })}"
+    ];
+
     systemd.user.services.podman-api = {
       description = "Rootless podman API for the opencode sandbox";
       wantedBy = [ "default.target" ];
