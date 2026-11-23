@@ -13,12 +13,19 @@ container sidecar, `podman` and `podman-compose` are on `PATH` and
 
 ```sh
 command -v podman podman-compose
-podman --remote info >/dev/null && echo "sidecar ready"
+# The sidecar may still be starting on a freshly booted VM; retry briefly.
+i=0
+while [ "$i" -lt 30 ]; do
+  podman --remote info >/dev/null 2>&1 && { echo "sidecar ready"; break; }
+  i=$((i + 1))
+  sleep 1
+done
 ```
 
-If `podman` is missing or `podman --remote info` fails, the sidecar is not
-configured for this repo. Do not try to start a daemon or use the host's
-`/var/run/docker.sock`; report that the test needs the container sidecar.
+If `podman` is missing, or `podman --remote info` still fails after the retries,
+the sidecar is not configured for this repo. Do not try to start a daemon or use
+the host's `/var/run/docker.sock`; report that the test needs the container
+sidecar.
 
 ## Write the compose file
 

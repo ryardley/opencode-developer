@@ -94,8 +94,19 @@ in
     systemd.user.services.podman-api = {
       description = "Rootless podman API for the opencode sandbox";
       wantedBy = [ "default.target" ];
-      unitConfig.ConditionUser = cfg.user;
+      unitConfig = {
+        ConditionUser = cfg.user;
+        # Retry until the port is free instead of giving up after the default
+        # 5 starts in 10s. A boot-time race for the port (or a slow user
+        # manager) must not leave the sidecar permanently failed, which would
+        # surface in the sandbox as a bare "connection refused".
+        StartLimitIntervalSec = 0;
+      };
       serviceConfig = {
+        # Log what, if anything, already holds the port before each start, so a
+        # future flap is diagnosable from the journal rather than a bare
+        # "address already in use". Non-fatal: the bind below still decides.
+        ExecStartPre = "${pkgs.bash}/bin/bash -c '${pkgs.iproute2}/bin/ss -ltn 2>/dev/null | grep -F 127.0.0.1:${toString cfg.port} || true'";
         ExecStart = "${pkgs.podman}/bin/podman system service --time=0 tcp://127.0.0.1:${toString cfg.port}";
         Restart = "on-failure";
         RestartSec = 2;
