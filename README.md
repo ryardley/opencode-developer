@@ -73,6 +73,7 @@ in
   packages = [
     (od.mkRalph opencode)
     od.mkArchive
+    od.mkInstallSkills
     od.mkKillRalph
     od.tk
   ];
@@ -90,7 +91,7 @@ ralph             # all ready tickets
 ralph pw-4hz9     # one ticket
 ```
 
-`ralph`, `tk`, and the sandboxed `opencode` are on PATH inside the shell.
+`ralph`, `tk`, `install-skills`, and the sandboxed `opencode` are on PATH inside the shell.
 
 Env (same as before): `RALPH_MAX_ATTEMPTS` (3), `RALPH_MAX_ITERATIONS` (100),
 `RALPH_MODEL`, `RALPH_AGENT`.
