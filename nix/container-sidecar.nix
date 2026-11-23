@@ -49,7 +49,32 @@ in
   };
 
   config = {
-    environment.systemPackages = [ pkgs.podman ];
+    environment.systemPackages = [
+      pkgs.podman
+      pkgs.shadow
+      pkgs.slirp4netns
+      pkgs.fuse-overlayfs
+    ];
+
+    # Rootless podman maps the runner's subuid/subgid ranges via
+    # newuidmap/newgidmap. These must be setuid-root so the unprivileged
+    # container-runner user can apply the mapping; without them every
+    # `podman system service` start fails with
+    #   exec: "newuidmap": executable file not found in $PATH
+    security.wrappers = {
+      newuidmap = {
+        owner = "root";
+        group = "root";
+        setuid = true;
+        source = "${pkgs.shadow}/bin/newuidmap";
+      };
+      newgidmap = {
+        owner = "root";
+        group = "root";
+        setuid = true;
+        source = "${pkgs.shadow}/bin/newgidmap";
+      };
+    };
 
     users.groups.${cfg.group} = { };
     users.users.${cfg.user} = {
