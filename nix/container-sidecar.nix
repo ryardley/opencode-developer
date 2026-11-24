@@ -110,6 +110,12 @@ in
     systemd.user.services.podman-api = {
       description = "Rootless podman API for the opencode sandbox";
       wantedBy = [ "default.target" ];
+      # Rootless podman maps the runner's subuid/subgid ranges by exec'ing
+      # newuidmap/newgidmap from PATH. The capability-bearing wrappers live in
+      # /run/wrappers/bin, which is not part of the default systemd service
+      # PATH. Without this, `podman info` fails with "newuidmap: executable
+      # file not found in $PATH" and the sidecar crash-loops.
+      path = [ "/run/wrappers" ];
       unitConfig = {
         ConditionUser = cfg.user;
         # Retry until the port is free instead of giving up after the default
@@ -129,7 +135,9 @@ in
         # Initialize it here, in the main process, so a fresh boot waits for
         # init to succeed before binding. Doing it in ExecStart (not
         # ExecStartPre) means Restart=on-failure applies if init keeps failing.
-        ExecStart = "${pkgs.bash}/bin/bash -c 'i=0; until ${pkgs.podman}/bin/podman info >/dev/null 2>&1; do i=$((i+1)); if [ $i -ge 60 ]; then echo \"podman init failed after 60s\" >&2; exit 1; fi; ${pkgs.coreutils}/bin/sleep 1; done; exec ${pkgs.podman}/bin/podman system service --time=0 tcp://127.0.0.1:${toString cfg.port}'";
+        # Log the first and final failure so the journal shows the real cause
+        # instead of only the timeout.
+        ExecStart = "${pkgs.bash}/bin/bash -c 'i=0; until out=$(${pkgs.podman}/bin/podman info 2>&1); do i=$((i+1)); if [ $i -eq 1 ]; then echo \"podman info failed: $out\" >&2; fi; if [ $i -ge 60 ]; then echo \"podman init failed after 60s: $out\" >&2; exit 1; fi; ${pkgs.coreutils}/bin/sleep 1; done; exec ${pkgs.podman}/bin/podman system service --time=0 tcp://127.0.0.1:${toString cfg.port}'";
         Restart = "on-failure";
         RestartSec = 2;
       };
